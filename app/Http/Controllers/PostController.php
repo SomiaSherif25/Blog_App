@@ -2,76 +2,56 @@
 
 namespace App\Http\Controllers;
 
+use App\Facades\PostFacade;
+use App\Http\Requests\PostRequest;
+use App\Http\Resources\PostResource;
 use App\Models\Post;
+use App\Services\ApiResponseFormat;
 use Illuminate\Http\Request;
 
 class PostController extends Controller
 {
+    public $ApiResponseFormat;
+
+    public function __construct(){
+        $this->ApiResponseFormat=new ApiResponseFormat();
+    }
     /**
      * Display a listing of the resource.
      */
     public function index() {
-        return auth()->user()->posts()->with('tags')->get();
+        $posts = PostResource::collection(PostFacade::getAllPosts());
+        return $this->ApiResponseFormat->success($posts, 'Posts retrieved successfully');
     }
 
-    public function store(Request $request) {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'body' => 'required|string',
-            'cover_image' => 'required|image',
-            'pinned' => 'required|boolean',
-            'tags' => 'required|array',
-        ]);
-
-        $post = auth()->user()->posts()->create([
-            'title' => $validated['title'],
-            'body' => $validated['body'],
-            'cover_image' => $request->file('cover_image')->store('images'),
-            'pinned' => $validated['pinned'],
-        ]);
-
-        $post->tags()->attach($validated['tags']);
-        return $post;
+    public function store(PostRequest $request) {
+        $posts = PostFacade::createPost($request);
+        return $this->ApiResponseFormat->success($posts, 'Post created successfully');
     }
 
-    public function show(Post $post) {
-        $this->authorize('view', $post);
-        return $post->load('tags');
+    public function show($id) {
+       $post = PostFacade::getPostById($id);
+        return $this->ApiResponseFormat->success($post, 'Post retrieved successfully');
     }
 
-    public function update(Request $request, Post $post) {
-        $this->authorize('update', $post);
+    public function update(PostRequest $request, $id) {
+        $post = PostFacade::updatePost($request, $id);
+        return $this->ApiResponseFormat->success($post, 'Post updated successfully');
+    }
 
-        $validated = $request->validate([
-            'title' => 'sometimes|required|string|max:255',
-            'body' => 'sometimes|required|string',
-            'cover_image' => 'sometimes|image',
-            'pinned' => 'sometimes|required|boolean',
-            'tags' => 'sometimes|array',
-        ]);
-
-        if ($request->hasFile('cover_image')) {
-            $validated['cover_image'] = $request->file('cover_image')->store('images');
+    public function destroy($id) {
+        $post = PostFacade::deletePost($id);
+        if(!$post){
+            return $this->ApiResponseFormat->error('Post not found', 404);
         }
-
-        $post->update($validated);
-        if ($request->has('tags')) {
-            $post->tags()->sync($validated['tags']);
-        }
-
-        return $post;
-    }
-
-    public function destroy(Post $post) {
-        $this->authorize('delete', $post);
-        $post->delete();
-        return response()->json(['message' => 'Post soft deleted']);
+        return $this->ApiResponseFormat->success(null, 'Post deleted successfully');
     }
 
     public function restore($id) {
-        $post = Post::onlyTrashed()->findOrFail($id);
-        $this->authorize('restore', $post);
-        $post->restore();
-        return response()->json(['message' => 'Post restored']);
+        $post = PostFacade::restorePost($id);
+        if(!$post){
+            return $this->ApiResponseFormat->error('Post not found', 404);
+        }
+        return $this->ApiResponseFormat->success(null, 'Post restored successfully');
     }
 }

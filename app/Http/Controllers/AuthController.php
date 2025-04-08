@@ -2,47 +2,26 @@
 
 namespace App\Http\Controllers;
 
+use App\Facades\AuthFacade;
+use App\Http\Requests\LoginRequest;
+use App\Http\Requests\ResgisterRequest;
 use App\Models\User;
+use App\Services\ApiResponseFormat;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    public function register(Request $request){
-        $validated =  $request->validate([
-            'name' => 'required|string|max:255',
-            'phone' => 'required|string|unique:users',
-            'password' => 'required|string|min:8',
-        ]);
-
-        $user = User::create([
-            'name' => $validated['name'],
-            'phone' => $validated['phone'],
-            'password' => bcrypt($validated['password']),
-        ]);
-
-        $token = $user->createToken('authToken')->plainTextToken;
-
-        return response()->json([
-            'user' => $user,
-            'token' => $token,
-        ]);
+    public function register(ResgisterRequest $request){
+       $user = AuthFacade::register($request);
+       return ApiResponseFormat::success($user,'User registered successfully');
     }
 
-    public function login(Request $request){
-        $credentials = $request->validate([
-            'phone' => 'required|string',
-            'password' => 'required|string',
-        ]);
-
-        $user = User::where('phone', $credentials['phone'])->first();
-
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
+    public function login(LoginRequest $request){
+        $user = AuthFacade::login($request);
+        if(!$user){
+            return ApiResponseFormat::error('Invalid credentials',401);
         }
-
-        $token = $user->createToken('authToken')->plainTextToken;
-
-        return response()->json(['user' => $user, 'token' => $token]);
+        return ApiResponseFormat::success($user,'User logged in successfully');
     }
 }
